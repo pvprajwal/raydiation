@@ -1,0 +1,85 @@
+#!/bin/bash
+#PBS -N raydiation
+#PBS -q gpuq
+#PBS -l select=1:ncpus=8:ngpus=1
+#PBS -l walltime=00:15:00
+
+# Build and run the current raydiation code on an AQUA GPU node.
+# The program writes out_gpu/raydiation_output.csv; results are copied back
+# to $PBS_O_WORKDIR/results along with the build/run logs and a row-sum check.
+
+set -u
+echo "== job ${PBS_JOBID:-local} on $(hostname) $(date)"
+nvidia-smi --query-gpu=name,memory.total,driver_version,compute_cap \
+    --format=csv,noheader 2>&1
+
+NVCC=""
+for c in /lfs/sware/cuda-12.2 /lfs/sware/cuda-12.4 /lfs/sware/cuda-11.7; do
+    if [ -x "$c/bin/nvcc" ]; then
+        NVCC="$c/bin/nvcc"
+        export PATH="$c/bin:$PATH"
+        export LD_LIBRARY_PATH="$c/lib64:${LD_LIBRARY_PATH:-}"
+        break
+    fi
+done
+[ -n "$NVCC" ] || { echo "ERROR: no modern nvcc"; exit 1; }
+echo "== nvcc: $($NVCC --version | tail -1)"
+
+CCBIN=/lfs/sware/gcc12.1.0/bin/g++
+[ -x "$CCBIN" ] || { echo "ERROR: g++ 12.1 not found at $CCBIN"; exit 1; }
+export LD_LIBRARY_PATH="/lfs/sware/gcc12.1.0/lib64:${LD_LIBRARY_PATH:-}"
+echo "== host compiler: $($CCBIN --version | head -1)"
+
+JOBDIR="$HOME/scratch/job$(echo "${PBS_JOBID:-local}" | cut -f 1 -d.)"
+rm -rf "$JOBDIR"
+mkdir -p "$JOBDIR"
+cd "$JOBDIR" || exit 1
+rsync -a --exclude .git --exclude build --exclude out_gpu --exclude results \
+    --exclude results_aqua "${PBS_O_WORKDIR:-$PWD}"/ ./
+mkdir -p build logs
+
+echo "== build"
+"$NVCC" -O3 -std=c++17 -arch=sm_70 -ccbin "$CCBIN" \
+    -Xcompiler -Wall src/main.cu -o build/raytrace -lcurand \
+    > logs/nvcc.log 2>&1
+rc=$?
+echo "nvcc_rc=$rc"
+tail -20 logs/nvcc.log
+[ -x build/raytrace ] || { echo "ERROR: build failed"; exit 1; }
+
+echo "== run"
+/usr/bin/time -f "WALL_SECONDS=%e" ./build/raytrace > logs/run.log 2>&1
+rc=$?
+echo "run_rc=$rc"
+cat logs/run.log
+[ "$rc" -eq 0 ] || exit 1
+[ -f out_gpu/raydiation_output.csv ] || { echo "ERROR: CSV missing"; exit 1; }
+
+echo "== row-sum check"
+awk -F, '
+    NR > 1 {
+        sum = 0
+        for (i = 2; i <= NF; ++i) sum += $i
+        if (sum < lo || NR == 2) lo = sum
+        if (sum > hi || NR == 2) hi = sum
+        if (sum < 0.999999 || sum > 1.000001) bad++
+        rows++
+    }
+    END {
+        printf "rows=%d destinations=%d row_sum_min=%.12f row_sum_max=%.12f bad_rows=%d\n",
+               rows, NF - 1, lo, hi, bad + 0
+        exit(bad + 0 != 0)
+    }' out_gpu/raydiation_output.csv | tee results_validation.txt
+[ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
+
+mkdir -p results
+cp out_gpu/raydiation_output.csv results/
+cp logs/nvcc.log logs/run.log results_validation.txt results/
+
+echo "== copy results back"
+RES="${PBS_O_WORKDIR:-$HOME}/results"
+rm -rf "$RES"
+mkdir -p "$RES"
+cp -r results/* "$RES"/
+echo "== done $(date)"
+ls -la "$RES"
