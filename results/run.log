@@ -1,0 +1,3 @@
+Traced 1638400 rays in 16.97 ms
+Wrote out_gpu/raydiation_output.csv
+WALL_SECONDS=0.31
