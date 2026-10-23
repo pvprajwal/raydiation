@@ -1,3 +1,5 @@
-Traced 1638400 rays in 16.97 ms
+Traced 1638400 rays in 17.01 ms
+Solved temperature field in 100 Jacobi iterations (hot wall 2, 1000 K)
 Wrote out_gpu/raydiation_output.csv
-WALL_SECONDS=0.31
+Wrote out_gpu/temperature_field.csv
+WALL_SECONDS=0.36

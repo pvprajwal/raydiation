@@ -47,6 +47,21 @@ __global__ void trace_rays_kernel(int total_rays, int rays_per_cell, int seed, i
     }
 }
 
+// one Jacobi sweep for u = T^4 / T_hot^4.
+__global__ void temperature_kernel(int nc, int ndest, int n, int hot_wall, int rays_per_cell, const int* tallies, const float* u, float* un) {
+    int stride = gridDim.x * blockDim.x;
+
+    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < nc; i += stride) {
+        const int* row = tallies + i*ndest;
+        float sum = 0.0f;
+
+        for (int j = 0; j < nc; ++j) sum += row[j]*u[j];
+        for (int seg = 0; seg < n; ++seg) sum += row[nc + hot_wall*n + seg];
+
+        un[i] = sum/rays_per_cell;
+    }
+}
+
 #define CUDA_CHECK(call)                                                      \
     do {                                                                      \
         cudaError_t err = (call);                                             \
@@ -72,7 +87,9 @@ int main() {
     float wall_emissivity = 1.0f;         // 1 = black walls
     int wall_angle = WallProjected3D;     // for gray walls
     bool volume_3d = false;
-    std::string out_dir = "out_gpu";
+    std::string out_dir = "results";
+    float T_hot = 1000.0f;                // hot wall temperature, K
+    int hot_wall = 2;                     // 0 left, 1 right, 2 bottom, 3 top
 
     int tot= N*N;          // number of volume cells
     int ndest= tot + 4*N;      // cells + wall segments
@@ -105,6 +122,26 @@ int main() {
 
     std::vector<int> tallies(tally_count);
     CUDA_CHECK(cudaMemcpy(tallies.data(), d_tallies, tally_count*sizeof(int), cudaMemcpyDeviceToHost));
+
+    // temperature solve: u = T^4/T_hot^4, fixed 100 Jacobi sweeps
+    float *d_u, *d_un;
+    CUDA_CHECK(cudaMalloc(&d_u, tot*sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&d_un, tot*sizeof(float)));
+    CUDA_CHECK(cudaMemset(d_u, 0, tot*sizeof(float)));
+
+    int tblock = 256;
+    int tgrid = std::min((tot+tblock-1)/tblock, 64);
+    int titer = 100;
+    for (int it = 0; it < titer; ++it) {
+        temperature_kernel<<<tgrid, tblock>>>(tot, ndest, N, hot_wall, rays_per_cell, d_tallies, d_u, d_un);
+        CUDA_CHECK(cudaGetLastError());
+        float* tmp = d_u; d_u = d_un; d_un = tmp;
+    }
+
+    std::vector<float> u(tot);
+    CUDA_CHECK(cudaMemcpy(u.data(), d_u, tot*sizeof(float), cudaMemcpyDeviceToHost));
+    cudaFree(d_u);
+    cudaFree(d_un);
     cudaFree(d_tallies);
 
     // csv output
@@ -130,6 +167,16 @@ int main() {
         csv << '\n';
     }
 
+    std::ofstream temp(out_dir + "/temperature_field.csv");
+    temp << "cell_y,cell_x,x_over_H,y_over_H,T_over_Tw1,T_K\n" << std::setprecision(8);
+    for (int iy = 0; iy < N; ++iy) {
+        for (int ix = 0; ix < N; ++ix) {
+            float t = powf(fmaxf(u[iy*N + ix], 0.0f), 0.25f);
+            temp << iy << ',' << ix << ',' << (ix+0.5f)/N << ',' << (iy+0.5f)/N << ',' << t << ',' << t*T_hot << '\n';
+        }
+    }
+
     std::cout << "Wrote " << out_dir << "/raydiation_output.csv\n";
+    std::cout << "Wrote " << out_dir << "/temperature_field.csv\n";
     return 0;
 }

@@ -1,0 +1,2 @@
+rows=400 destinations=480 row_sum_min=0.999999999925 row_sum_max=1.000000000070 bad_rows=0
+temperature_rows=400 bad_rows=0
