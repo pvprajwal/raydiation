@@ -5,6 +5,11 @@ The domain is split into (n x n) volume cells. Every cell emits the same number 
 
 Output: raydiation_output.csv. r[s][d] is the fraction of rays from source cell s that were absorbd at destination d.
 
+![distribution factors](results/raydiation_visualization.png)
+
+![temperature profile](results/temperature_profile.png)
+
+
 Reference:
 *Jiang Shao, Keyong Zhu, Yong Huang,
 A fast GPU Monte Carlo implementation for radiative heat transfer in graded-index media,

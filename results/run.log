@@ -1,5 +1,8 @@
-Traced 1638400 rays in 17.01 ms
+Pilot: 204800 rays in 3.29 ms
+Allocation: production=1433600, n_i min/mean/max=2065/3584.0/5655
+Production: 1433600 rays in 14.49 ms
 Solved temperature field in 100 Jacobi iterations (hot wall 2, 1000 K)
-Wrote out_gpu/raydiation_output.csv
-Wrote out_gpu/temperature_field.csv
-WALL_SECONDS=0.36
+Wrote results/raydiation_output.csv
+Wrote results/temperature_field.csv
+Wrote results/adaptive_allocation.csv
+WALL_SECONDS=0.67
