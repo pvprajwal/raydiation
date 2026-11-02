@@ -5,8 +5,8 @@
 #PBS -l walltime=00:15:00
 
 # Build and run the current raydiation code on an AQUA GPU node.
-# The program writes out_gpu/raydiation_output.csv and
-# out_gpu/temperature_field.csv; results are copied back to
+# The program writes results/raydiation_output.csv and
+# results/temperature_field.csv; results are copied back to
 # $PBS_O_WORKDIR/results along with the build/run logs and checks.
 
 set -u
@@ -54,8 +54,8 @@ rc=$?
 echo "run_rc=$rc"
 cat logs/run.log
 [ "$rc" -eq 0 ] || exit 1
-[ -f out_gpu/raydiation_output.csv ] || { echo "ERROR: CSV missing"; exit 1; }
-[ -f out_gpu/temperature_field.csv ] || { echo "ERROR: temperature CSV missing"; exit 1; }
+[ -f results/raydiation_output.csv ] || { echo "ERROR: CSV missing"; exit 1; }
+[ -f results/temperature_field.csv ] || { echo "ERROR: temperature CSV missing"; exit 1; }
 
 echo "== row-sum check"
 awk -F, '
@@ -71,7 +71,7 @@ awk -F, '
         printf "rows=%d destinations=%d row_sum_min=%.12f row_sum_max=%.12f bad_rows=%d\n",
                rows, NF - 1, lo, hi, bad + 0
         exit(bad + 0 != 0)
-    }' out_gpu/raydiation_output.csv | tee results_validation.txt
+    }' results/raydiation_output.csv | tee results_validation.txt
 [ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
 
 echo "== temperature check"
@@ -83,11 +83,10 @@ awk -F, '
     END {
         printf "temperature_rows=%d bad_rows=%d\n", rows, bad + 0
         exit(bad + 0 != 0)
-    }' out_gpu/temperature_field.csv | tee -a results_validation.txt
+    }' results/temperature_field.csv | tee -a results_validation.txt
 [ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
 
 mkdir -p results
-cp out_gpu/raydiation_output.csv out_gpu/temperature_field.csv results/
 cp logs/nvcc.log logs/run.log results_validation.txt results/
 
 echo "== copy results back"

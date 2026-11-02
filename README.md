@@ -5,6 +5,18 @@ The domain is split into (n x n) volume cells. Every cell emits the same number 
 
 Output: raydiation_output.csv. r[s][d] is the fraction of rays from source cell s that were absorbd at destination d.
 
+
+The fixed-step advance() in model.cuh integrates with a scalar length
+correction. This header uses one full RK4 step and two half steps to
+estimate the local error. The two-half-step result is accepted, and the
+next step grows or shrinks from that estimate. The last boundary_layer of
+distance before a wall is resolved at the v1 step, and collision steps are
+corrected onto the sampled free path.
+
+![distribution factors](results/raydiation_visualization.png)   
+
+[temperature fields](results/temperature_field.csv)
+
 Reference:
 *Jiang Shao, Keyong Zhu, Yong Huang,
 A fast GPU Monte Carlo implementation for radiative heat transfer in graded-index media,

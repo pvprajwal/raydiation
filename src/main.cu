@@ -12,11 +12,12 @@
 #include <vector>
 
 #include "model.cuh"
+#include "adaptive.cuh"
 
 // one thread per ray in strided fashion
 // tallies = (cells^2) -> ndest map. ndest = cells^2 + 4*cells (volume cells + wall edges)
 
-__global__ void trace_rays_kernel(int total_rays, int rays_per_cell, int seed, int ndest, bool volume_3d, Model model, TraceConfig cfg, int* tallies) {
+__global__ void __launch_bounds__(256, 4) trace_rays_kernel(int total_rays, int rays_per_cell, int seed, int ndest, bool volume_3d, Model model, TraceConfig cfg, AdaptiveConfig ac, int* tallies) {
     int stride = gridDim.x * blockDim.x;
 
     for (int ray = blockIdx.x * blockDim.x + threadIdx.x; ray<total_rays; ray += stride) {
@@ -40,7 +41,7 @@ __global__ void trace_rays_kernel(int total_rays, int rays_per_cell, int seed, i
         State start{x0, y0, n0*cosf(angle), n0*sinf(angle)};
 
         // follow the ray, then count where it ended.
-        int dest = trace_ray(start, path_scale, model, cfg, rng);
+        int dest = trace_ray_adaptive(start, path_scale, model, cfg, ac, rng);
         if (dest < 0) continue; // bad ray
 
         atomicAdd(&tallies[source*ndest + dest], 1);
@@ -98,6 +99,10 @@ int main() {
     Model model = (isGRIN) ? Model{5.0f, 0.4356f} : Model{1.0f, 0.0f};
     TraceConfig cfg{tau, omega, max_step, N, wall_emissivity, wall_angle};
 
+    // v5 adaptive RK4: tol=1e-6, 0.02 initial step, v1 step near walls.
+    AdaptiveConfig ac;
+    ac.boundary_step = max_step;
+
     size_t tally_count = (size_t)tot * ndest;
     int* d_tallies;
     CUDA_CHECK(cudaMalloc(&d_tallies, tally_count *sizeof(int)));
@@ -111,7 +116,7 @@ int main() {
     CUDA_CHECK(cudaEventCreate(&stop_ev));
 
     CUDA_CHECK(cudaEventRecord(start_ev));
-    trace_rays_kernel<<<grid, block>>>(total_rays, rays_per_cell, seed, ndest, volume_3d, model, cfg, d_tallies);
+    trace_rays_kernel<<<grid, block>>>(total_rays, rays_per_cell, seed, ndest, volume_3d, model, cfg, ac, d_tallies);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaEventRecord(stop_ev));
     CUDA_CHECK(cudaEventSynchronize(stop_ev));

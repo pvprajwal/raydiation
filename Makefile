@@ -2,7 +2,7 @@ NVCC       ?= nvcc
 NVCCFLAGS  ?= -O3 -std=c++17
 ARCH       ?= native
 SRC        := src/main.cu
-HEADERS    := src/model.cuh src/rng.cuh
+HEADERS    := src/model.cuh src/rng.cuh src/adaptive.cuh
 BIN        := raytrace
 ARGS       ?=
 
