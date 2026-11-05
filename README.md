@@ -1,5 +1,5 @@
 # Raydiation
-Ray tracing for radiative heat transfer in CUDA. CS6023 Course Project.
+Raydiation *(Ray tracing + Radiation)* is a CUDA Monte Carlo ray tracing implementation for radiative heat transfer in graded-index media. 
 
 The domain is split into (n x n) volume cells. Every cell emits the same number of rays. Each GPU thread traces rays one at a time until they are absorbed in a volume cell or on a wall, and counts the result in a (source cell, destination) table.
 
@@ -15,7 +15,7 @@ corrected onto the sampled free path.
 
 ![distribution factors](results/raydiation_visualization.png)   
 
-[temperature fields](results/temperature_field.csv)
+![temperature fields](results/temperature_profile.png)
 
 Reference:
 *Jiang Shao, Keyong Zhu, Yong Huang,

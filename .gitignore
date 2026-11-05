@@ -7,3 +7,6 @@
 .DS_Store
 raytrace
 out_gpu/
+aqua/
+results_bench/
+bench/
