@@ -9,4 +9,4 @@ raytrace
 out_gpu/
 aqua/
 results_bench/
-bench/
+bench/summarize.py
